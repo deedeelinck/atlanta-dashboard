@@ -226,6 +226,8 @@ body{font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,A
 .card.hot{border-left:0}
 .card.s-negotiating{box-shadow:0 0 0 1.5px rgba(46,125,50,.32),0 1px 2px rgba(16,24,40,.05)}
 .card.s-negotiating:hover{box-shadow:0 0 0 1.5px rgba(46,125,50,.42),0 12px 28px -8px rgba(16,24,40,.18)}
+.card.s-leasereview{box-shadow:0 0 0 1.5px rgba(107,63,163,.32),0 1px 2px rgba(16,24,40,.05)}
+.card.s-leasereview:hover{box-shadow:0 0 0 1.5px rgba(107,63,163,.42),0 12px 28px -8px rgba(16,24,40,.18)}
 
 /* image with the status pill riding on it */
 .card .photo{position:relative;margin:0;height:158px;background:#EDF0F3;overflow:hidden;display:block;
@@ -505,6 +507,12 @@ body,table,input,select,button{font-variant-numeric:tabular-nums}
 .t-blue{color:#3C6795;font-weight:600}
 .card .stg.b-blue{background:#3C6795;color:#fff}
 
+/* Lease Review: the lease document is with counsel, one step past LOI - its own
+   purple so it doesn't read as "just another LOI" on cards, chips or the map */
+.b-purple{background:#F1EAFB;color:#6B3FA3}
+.t-purple{color:#6B3FA3;font-weight:600}
+.card .stg.b-purple{background:#6B3FA3;color:#fff}
+
 /* a stage with no sites still shows, so the full funnel is always visible */
 .chip.zero{opacity:.55}
 .chip.zero:hover{opacity:.85}
@@ -625,7 +633,7 @@ body,table,input,select,button{font-variant-numeric:tabular-nums}
       <div class="hspace" style="flex:1"></div>
       <input class="search" id="q" placeholder="Search address, submarket, zoning, notes…">
       <select class="sel" id="sort">
-        <option value="stage" selected>Sort: status (LOI first)</option>
+        <option value="stage" selected>Sort: status (Lease Review first)</option>
         <option value="cost">Sort: rent per month (low→high)</option>
         <option value="cost-d">Sort: rent per month (high→low)</option>
         <option value="ppv">Sort: cost per vehicle</option>
@@ -681,11 +689,15 @@ let DATA = null;
 let SRC = { mode:"none", name:null, when:null };
 
 /* ============ shape the raw data ============ */
-/* Ops owns the status vocabulary now - LOI / Longlist / Touring / Eliminated -
-   but the colour scheme, map pins and sort order still run off these four stages. */
+/* Ops owns the status vocabulary now - LOI / Longlist / Touring / Lease Review /
+   Eliminated - but the colour scheme, map pins and sort order still run off these
+   stages. Lease Review sits one step past LOI (lease document with counsel, ahead
+   of signature) so it's checked before the generic "Reviewing" catch-all - a
+   status of "Lease Review" would otherwise also match REVIEW below. */
 function stageOf(v){
   const t=String(v||"").toUpperCase();
   if(t.includes("ELIMINAT")) return "eliminated";
+  if(t.includes("LEASE")) return "leasereview";                 // Lease Review
   if(t.includes("LOI")||t.includes("NEGOTIAT")) return "negotiating";
   if(t.includes("LONGLIST")||t.includes("SHORTLIST")) return "surveyed";  // Longlist (formerly Shortlisted)
   if(t.includes("TOUR")) return "active";                       // Touring
@@ -727,10 +739,10 @@ function yncBadge(v, why){
   if(t==="conditional") return blank(why) ? el("span","badge b-amber","Conditional") : whyBadge("Conditional",why,"b-amber");
   return null;   // blank until answered - never guessed
 }
-const STAGE_LBL={negotiating:"LOI",surveyed:"Longlist",active:"Touring",reviewing:"Reviewing",eliminated:"Eliminated"};
-const STAGE_FULL={negotiating:"LOI",surveyed:"Longlist",active:"Touring",reviewing:"Reviewing",eliminated:"Eliminated"};
-const STAGE_CLS={negotiating:"b-green",surveyed:"b-amber",active:"b-blue",reviewing:"b-grey",eliminated:"b-red"};
-const STAGE_TXT={negotiating:"t-green",surveyed:"t-amber",active:"t-blue",reviewing:"t-grey",eliminated:"t-red"};
+const STAGE_LBL={leasereview:"Lease Review",negotiating:"LOI",surveyed:"Longlist",active:"Touring",reviewing:"Reviewing",eliminated:"Eliminated"};
+const STAGE_FULL={leasereview:"Lease Review",negotiating:"LOI",surveyed:"Longlist",active:"Touring",reviewing:"Reviewing",eliminated:"Eliminated"};
+const STAGE_CLS={leasereview:"b-purple",negotiating:"b-green",surveyed:"b-amber",active:"b-blue",reviewing:"b-grey",eliminated:"b-red"};
+const STAGE_TXT={leasereview:"t-purple",negotiating:"t-green",surveyed:"t-amber",active:"t-blue",reviewing:"t-grey",eliminated:"t-red"};
 const PPV_STAR = 300;   // star anything under $300 per vehicle per month
 const dispName = s => (blank(s.nickname) ? s.addr : s.nickname + " - " + s.addr);
 
@@ -746,7 +758,7 @@ function sfCell(v){
 }
 const sfLabel = (base,v) => isSFRange(v) ? base+" (divisible)" : base;
 const RISK_CLS={high:"b-red",mod:"b-amber",low:"b-green",tbd:"b-grey"};
-const PIN_FILL={negotiating:"#2E7D32",surveyed:"#E0A33A",active:"#3C6795",reviewing:"#6B7280",eliminated:"#C0392B"};
+const PIN_FILL={leasereview:"#6B3FA3",negotiating:"#2E7D32",surveyed:"#E0A33A",active:"#3C6795",reviewing:"#6B7280",eliminated:"#C0392B"};
 
 /* Derive anything the workbook hasn't cached, so nothing shows blank just because
    Excel hasn't recalculated the file since it was last written. */
@@ -1029,8 +1041,8 @@ function visible(){
     list=list.filter(s=>["addr","nickname","city","alias","submarket","zoning","muni","notes","next","power","status","flag","rentstruct"]
       .some(k=>String(s[k]||"").toLowerCase().includes(q)));
   }
-  // closest to a deal first: LOI -> Longlist -> Touring -> Eliminated
-  const ord={negotiating:0,surveyed:1,active:2,reviewing:3,eliminated:4};
+  // closest to a deal first: Lease Review -> LOI -> Longlist -> Touring -> Eliminated
+  const ord={leasereview:0,negotiating:1,surveyed:2,active:3,reviewing:4,eliminated:5};
   const big=Number.MAX_SAFE_INTEGER;
   const cmp={
     cost:(a,b)=>(isNum(a.monthly)?a.monthly:big)-(isNum(b.monthly)?b.monthly:big),
@@ -1048,7 +1060,7 @@ function renderChips(){
   DATA.sites.forEach(s=>counts[s.stage]=(counts[s.stage]||0)+1);
   const c=$("#statchips"); c.innerHTML="";
   // filter labels follow the Ops Tracker vocabulary
-  [["all","All"],["negotiating","LOI"],["surveyed","Longlist"],["active","Touring"],["reviewing","Reviewing"],["eliminated","Eliminated"]]
+  [["all","All"],["leasereview","Lease Review"],["negotiating","LOI"],["surveyed","Longlist"],["active","Touring"],["reviewing","Reviewing"],["eliminated","Eliminated"]]
   .forEach(([k,lbl])=>{
     const n=counts[k]||0;
     const b=el("button","chip"+(filterStage===k?" on":"")+(n?"":" zero"), esc(lbl)+'<span class="n">'+n+"</span>");
@@ -1414,7 +1426,7 @@ function ensureLeaflet(){
 
 function mapLegend(){
   const lg=el("div","maplegend");
-  ["negotiating","surveyed","active","reviewing","eliminated"].forEach(kk=>{
+  ["leasereview","negotiating","surveyed","active","reviewing","eliminated"].forEach(kk=>{
     const lbl = STAGE_LBL[kk];
     const sp=el("span");
     const i=el("i"); i.style.background=PIN_FILL[kk]; sp.appendChild(i);
@@ -1453,9 +1465,9 @@ function buildSatMap(canvas,pts){
   L.tileLayer(SAT_TILES,{maxZoom:19,attribution:"Imagery &copy; Esri, Maxar, Earthstar Geographics"}).addTo(map);
   L.tileLayer(SAT_LABELS,{maxZoom:19,opacity:.9}).addTo(map);
 
-  const order={eliminated:0,surveyed:1,active:2,negotiating:3};
+  const order={eliminated:0,surveyed:1,active:2,negotiating:3,leasereview:4};
   pts.slice().sort((a,b)=>order[a.stage]-order[b.stage]).forEach(s=>{
-    const live=s.stage==="negotiating"||s.stage==="active";
+    const live=s.stage==="negotiating"||s.stage==="active"||s.stage==="leasereview";
     if(live){
       L.circleMarker([s.lat,s.lon],{radius:15,color:PIN_FILL[s.stage],weight:0,
         fillColor:PIN_FILL[s.stage],fillOpacity:.22,interactive:false}).addTo(map);
@@ -1567,12 +1579,12 @@ function renderMapSVG(host,pts){
   pos.forEach(v=>placed.push({x0:v.x-9,x1:v.x+9,y0:v.y-9,y1:v.y+9}));
 
   // pins - eliminated first so the live ones draw on top
-  const order={eliminated:0,surveyed:1,active:2,negotiating:3};
+  const order={eliminated:0,surveyed:1,active:2,negotiating:3,leasereview:4};
   const tip=el("div","maptip");
   pts.slice().sort((a,b)=>order[a.stage]-order[b.stage]).forEach(s=>{
     const P=pos.get(s), x=P.x, y=P.y;
     const gp=mk("g",{class:"pin"});
-    const live=s.stage==="negotiating"||s.stage==="active";
+    const live=s.stage==="negotiating"||s.stage==="active"||s.stage==="leasereview";
     if(live) gp.appendChild(mk("circle",{cx:x,cy:y,r:14,fill:PIN_FILL[s.stage],opacity:.18}));
     gp.appendChild(mk("circle",{cx:x,cy:y,r:live?8:6,fill:PIN_FILL[s.stage],stroke:"#fff","stroke-width":2,class:"dot"}));
     const ttl=mk("title",{});
@@ -1648,7 +1660,7 @@ function renderCost(){
   key.appendChild(el("span","star","★"));
   key.appendChild(el("span",null,"= under "+money0(PPV_STAR)+" per Vehicle / Month"));
   key.appendChild(el("span","sep","·"));
-  [["negotiating","LOI"],["surveyed","Longlist"],["active","Touring"],["reviewing","Reviewing"],["eliminated","Eliminated"]].forEach(([k,lbl])=>{
+  [["leasereview","Lease Review"],["negotiating","LOI"],["surveyed","Longlist"],["active","Touring"],["reviewing","Reviewing"],["eliminated","Eliminated"]].forEach(([k,lbl])=>{
     key.appendChild(el("span",null,'<span class="'+STAGE_TXT[k]+'">'+esc(lbl)+"</span>"));
   });
   v.appendChild(key);
@@ -1675,7 +1687,7 @@ function renderCost(){
             + "\u2014 Rent per Month \u00f7 capacity \u2014 then re-sync.")));
     const list=el("div","txt");
     list.appendChild(el("b",null,"Still needed for all "+priced.length+" priced sites, starting with the live ones: "));
-    list.appendChild(el("span",null, priced.filter(x=>x.stage==="negotiating"||x.stage==="active")
+    list.appendChild(el("span",null, priced.filter(x=>x.stage==="negotiating"||x.stage==="active"||x.stage==="leasereview")
       .map(x=>dispName(x)).join(" · ")));
     nb.appendChild(list);
     v.appendChild(nb);
